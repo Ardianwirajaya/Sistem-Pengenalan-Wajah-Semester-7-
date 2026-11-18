@@ -1,0 +1,349 @@
+================================================================================
+DAFTAR ENDPOINT LENGKAP — SISTEM PENGENALAN WAJAH MAHASISWA
+================================================================================
+Base URL  : http://127.0.0.1:8000/api
+Auth      : Bearer Token (Laravel Sanctum)
+Header    : Accept: application/json  (WAJIB di setiap request)
+Content   : application/json (kecuali upload file: multipart/form-data)
+================================================================================
+
+
+--------------------------------------------------------------------------------
+AUTENTIKASI
+--------------------------------------------------------------------------------
+
+POST   /auth/login
+       Login dengan email + password.
+       Body: { email, password }
+       Response: { token, user }
+       Tidak butuh token.
+
+GET    /user
+       Data user yang sedang login.
+
+POST   /auth/logout
+       Hapus token yang sedang dipakai (tombol logout).
+       Hanya token ini yang dihapus, token di device lain tetap aktif.
+
+
+--------------------------------------------------------------------------------
+MAHASISWA (STUDENTS)
+--------------------------------------------------------------------------------
+
+GET    /students
+       Daftar mahasiswa (pagination).
+       Filter: ?search= (nama/NIM), ?is_active=true|false, ?per_page=, ?page=
+
+POST   /students
+       Buat mahasiswa baru.
+       Body: { nim, name, email?, program_study, is_active? }
+       NIM harus unik.
+
+GET    /students/{id}
+       Detail mahasiswa + daftar foto wajahnya.
+
+PUT    /students/{id}
+PATCH  /students/{id}
+       Update data mahasiswa. Kirim field yang berubah saja.
+       NIM boleh sama dengan NIM lama, tidak boleh sama dengan mahasiswa lain.
+
+DELETE /students/{id}
+       Soft delete. Baris tetap ada dengan deleted_at terisi.
+       Riwayat presensi tetap aman.
+
+
+--------------------------------------------------------------------------------
+FOTO WAJAH (STUDENT FACES)
+--------------------------------------------------------------------------------
+
+POST   /students/{id}/faces
+       Upload foto wajah. Multipart form-data.
+       Body: photo (jpg/png, max 5MB), is_primary? (bool)
+       Response berisi field "url" (signed URL MinIO, berlaku 15 menit).
+       Jika is_primary=true, foto lain milik mahasiswa ini jadi non-primary.
+
+GET    /students/{id}/faces
+       Daftar semua foto mahasiswa, masing-masing dengan signed URL.
+
+GET    /student-faces/{id}
+       Detail satu foto + signed URL.
+
+GET    /student-faces/{id}/url
+       Ambil signed URL baru (kalau URL lama sudah kedaluwarsa).
+       Response: { url, expires_in_seconds: 900 }
+
+DELETE /student-faces/{id}
+       Hapus foto. File di MinIO ikut dihapus, baris di DB di-soft-delete.
+
+
+--------------------------------------------------------------------------------
+MATA KULIAH (COURSES)
+--------------------------------------------------------------------------------
+
+GET    /courses
+       Daftar mata kuliah (tanpa pagination).
+       Filter: ?search= (nama/kode)
+
+POST   /courses
+       Body: { code, name, sks, is_active? }
+       Kode harus unik.
+
+GET    /courses/{id}
+       Detail + daftar kelas di bawahnya.
+
+PUT    /courses/{id}
+PATCH  /courses/{id}
+       Update mata kuliah.
+
+DELETE /courses/{id}
+       Hapus mata kuliah.
+       DITOLAK (422) kalau masih ada kelas terkait.
+
+
+--------------------------------------------------------------------------------
+KELAS (CLASSES)
+--------------------------------------------------------------------------------
+
+GET    /classes
+       Daftar kelas (dengan data mata kuliah).
+       Filter: ?course_id=, ?academic_year=
+
+POST   /classes
+       Body: { course_id, name, semester, academic_year, is_active? }
+       course_id harus valid.
+
+GET    /classes/{id}
+       Detail + mata kuliah + daftar jadwal.
+
+PUT    /classes/{id}
+PATCH  /classes/{id}
+       Update kelas.
+
+DELETE /classes/{id}
+       Hapus kelas.
+       DITOLAK (422) kalau sudah ada sesi presensi untuk jadwalnya.
+
+
+--------------------------------------------------------------------------------
+JADWAL KELAS (CLASS SCHEDULES)
+--------------------------------------------------------------------------------
+
+GET    /class-schedules
+       Daftar jadwal (dengan kelas + mata kuliah).
+       Filter: ?class_id=, ?day=
+
+POST   /class-schedules
+       Body: { class_id, day, start_time, end_time, room? }
+       Format waktu: HH:MM (24 jam).
+       end_time harus lebih besar dari start_time.
+
+GET    /class-schedules/{id}
+       Detail + kelas + mata kuliah.
+
+PUT    /class-schedules/{id}
+PATCH  /class-schedules/{id}
+       Update jadwal.
+
+DELETE /class-schedules/{id}
+       Hapus jadwal.
+       DITOLAK (422) kalau sudah ada sesi presensi.
+
+
+--------------------------------------------------------------------------------
+SESI PRESENSI (ATTENDANCE SESSIONS)
+--------------------------------------------------------------------------------
+
+GET    /attendance-sessions
+       Daftar sesi (pagination).
+       Filter: ?class_schedule_id=, ?date=YYYY-MM-DD, ?status=open|closed|cancelled
+
+POST   /attendance-sessions
+       Buka sesi presensi baru untuk jadwal + tanggal.
+       Body: { class_schedule_id, date }
+       opened_by dan status=open diisi otomatis.
+
+GET    /attendance-sessions/{id}
+       Detail lengkap: jadwal + kelas + mata kuliah + daftar kehadiran
+       + semua recognition session beserta hasilnya.
+
+PATCH  /attendance-sessions/{id}
+       Ubah status saja: { status: "open" | "closed" | "cancelled" }
+       TIDAK ADA endpoint DELETE — riwayat presensi tidak boleh dihapus.
+
+
+--------------------------------------------------------------------------------
+PENGENALAN WAJAH (RECOGNITIONS)
+--------------------------------------------------------------------------------
+
+POST   /recognitions
+       Upload foto kelas untuk diproses.
+       Multipart form-data.
+       Body: attendance_session_id, photo (jpg/png, max 10MB)
+       Syarat: sesi presensi harus berstatus "open".
+
+       Response 201:
+       {
+         "id": <recognition_session_id>,
+         "attendance_session_id": <id>,
+         "image_object_key": "sessions/1/...",
+         "status": "completed",
+         "model_version": "mock-v1",
+         "processing_time_ms": 1240,
+         "results": [
+           {
+             "id": 1,
+             "bbox": [100, 100, 180, 180],
+             "candidate_student_id": 42,
+             "similarity_score": 0.87,
+             "status": "matched",
+             "candidate_student": { "id": 42, "nim": "...", "name": "..." }
+           },
+           {
+             "id": 2,
+             "bbox": [200, 100, 280, 180],
+             "candidate_student_id": null,
+             "similarity_score": 0.31,
+             "status": "unknown",
+             "candidate_student": null
+           }
+         ]
+       }
+
+       Catatan: saat ini pakai MOCK AI. Respons instan (langsung completed).
+       Saat tim AI menyerahkan endpoint aslinya, backend akan memproses
+       secara async (status queued -> processing -> completed/failed).
+       Frontend sebaiknya SUDAH membangun pola polling:
+       POST /recognitions -> dapat id -> polling GET /recognitions/{id}
+       sampai status "completed".
+
+GET    /recognitions/{id}
+       Polling status + hasil pengenalan.
+       Setiap result berisi data candidate_student (atau null untuk unknown).
+
+POST   /recognitions/{id}/confirm
+       Dosen mengkonfirmasi hasil ke wajah yang terdeteksi.
+       Body:
+       {
+         "confirmations": [
+           { "recognition_result_id": 1, "student_id": 42, "status": "present" },
+           { "recognition_result_id": 2, "student_id": 57, "status": "present" },
+           { "recognition_result_id": 3, "student_id": null, "status": "unknown" }
+         ]
+       }
+       status: present | absent | excused | unknown
+       student_id null = wajah dilewati (dianggap unknown).
+
+       Response 200:
+       {
+         "message": "Presensi dikonfirmasi.",
+         "attendance_records": [ ... ]
+       }
+
+       Idempoten: klik konfirmasi dua kali tidak menghasilkan duplikat.
+       Error 422 kalau ada result yang bukan milik recognition session ini.
+
+
+--------------------------------------------------------------------------------
+LAPORAN (REPORTS)
+--------------------------------------------------------------------------------
+
+GET    /reports/attendance
+       Rekap kehadiran per mahasiswa.
+       Filter (minimal salah satu):
+         ?class_schedule_id=  (rekap untuk satu jadwal)
+         ?class_id=           (rekap untuk semua jadwal di kelas ini)
+       Filter opsional:
+         ?from=YYYY-MM-DD     (batas bawah tanggal)
+         ?to=YYYY-MM-DD       (batas atas tanggal)
+
+       Response 200:
+       {
+         "total_sessions": 4,
+         "from": "2026-01-01",
+         "to": "2026-12-31",
+         "students": [
+           {
+             "student_id": 1,
+             "nim": "2025001",
+             "name": "Ahmad Fauzi",
+             "present": 3,
+             "absent": 1,
+             "excused": 0,
+             "unknown": 0
+           }
+         ]
+       }
+
+
+================================================================================
+STATUS CODE
+================================================================================
+
+200  OK — request berhasil
+201  Created — resource berhasil dibuat
+401  Unauthenticated — token tidak ada / tidak valid
+404  Not Found — ID di URL tidak ditemukan
+422  Unprocessable — validasi gagal / aturan bisnis dilanggar
+500  Server Error — bug, laporkan ke tim backend
+
+
+================================================================================
+ALUR LENGKAP DOSEN (7 LANGKAH)
+================================================================================
+
+1. POST /auth/login
+   -> simpan token
+
+2. GET  /class-schedules?class_id=1
+   -> pilih jadwal hari ini
+
+3. POST /attendance-sessions
+   Body: { class_schedule_id, date }
+   -> dapat attendance_session.id
+
+4. POST /recognitions
+   Body: attendance_session_id + photo
+   -> dapat recognition.id + results[]
+
+5. GET  /recognitions/{id}
+   -> (polling) status + results dengan nama kandidat mahasiswa
+
+6. POST /recognitions/{id}/confirm
+   Body: confirmations[]
+   -> attendance_records dibuat
+
+7. GET  /attendance-sessions/{id}
+   -> verifikasi hasil akhir (details + recognition_sessions)
+
+
+================================================================================
+CATATAN PENTING
+================================================================================
+
+- Semua endpoint kecuali POST /auth/login WAJIB menyertakan header:
+    Authorization: Bearer <token>
+    Accept: application/json
+
+- Token akan dicabut saat user login ulang. Hanya token terakhir yang berlaku.
+
+- Signed URL foto berlaku 15 menit. Kalau <img> rusak, panggil
+  GET /student-faces/{id}/url untuk URL baru.
+
+- Field "embedding" pada student_faces masih null sampai tim AI
+  menyerahkan endpoint enrollment.
+
+- Setelah `php artisan migrate:fresh`, semua token hangus. Login ulang.
+
+- POST /recognitions saat ini pakai MOCK AI. Bentuk response sudah benar,
+  isinya palsu. Frontend cukup membangun polling pattern seperti langkah 4-6
+  di atas — nanti otomatis jalan dengan AI asli.
+
+- PENDING (belum dibangun, prioritas rendah):
+    * POST /training/jobs   (tim AI training di notebook sendiri)
+    * GET  /models          (registry model, tidak dipakai untuk demo)
+
+- Dokumentasi detail (contoh request/response lengkap):
+    docs/API-ID.txt atau docs/API.md
+================================================================================
+SELESAI
+================================================================================
