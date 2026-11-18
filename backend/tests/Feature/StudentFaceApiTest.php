@@ -148,4 +148,65 @@ class StudentFaceApiTest extends TestCase
 
         $response->assertStatus(401);
     }
+
+        public function test_store_returns_signed_url(): void
+    {
+        Storage::fake('minio');
+        $token = $this->loginAsAdmin();
+        $student = $this->makeStudent();
+
+        $response = $this->withHeaders([
+                'Authorization' => "Bearer $token",
+                'Accept' => 'application/json',
+            ])
+            ->post("/api/students/{$student->id}/faces", [
+                'photo' => UploadedFile::fake()->image('face.jpg'),
+            ]);
+
+        $response->assertStatus(201)
+            ->assertJsonStructure(['id', 'object_key', 'url']);
+
+        $url = $response->json('url');
+        $this->assertIsString($url);
+        $this->assertNotEmpty($url);
+        $this->assertStringContainsString($response->json('object_key'), $url);
+    }
+
+    public function test_can_list_faces_with_urls(): void
+    {
+        Storage::fake('minio');
+        $token = $this->loginAsAdmin();
+        $student = $this->makeStudent();
+
+        $this->withHeaders([
+                'Authorization' => "Bearer $token",
+                'Accept' => 'application/json',
+            ])
+            ->post("/api/students/{$student->id}/faces", [
+                'photo' => UploadedFile::fake()->image('face1.jpg'),
+            ]);
+
+        $this->withHeaders([
+                'Authorization' => "Bearer $token",
+                'Accept' => 'application/json',
+            ])
+            ->post("/api/students/{$student->id}/faces", [
+                'photo' => UploadedFile::fake()->image('face2.jpg'),
+                'is_primary' => true,
+            ]);
+
+        $response = $this->withHeaders([
+                'Authorization' => "Bearer $token",
+                'Accept' => 'application/json',
+            ])
+            ->getJson("/api/students/{$student->id}/faces");
+
+        $response->assertStatus(200)
+            ->assertJsonCount(2);
+
+        foreach ($response->json() as $face) {
+            $this->assertArrayHasKey('url', $face);
+            $this->assertNotEmpty($face['url']);
+        }
+    }
 }
