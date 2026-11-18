@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\StudentFaceController;
 use App\Http\Controllers\Api\CourseController;
 use App\Http\Controllers\Api\KelasController;
 use App\Http\Controllers\Api\ClassScheduleController;
+use App\Http\Controllers\Api\AttendanceSessionController;
 
 Route::post('/auth/login', [AuthController::class, 'login']);
 
@@ -16,7 +17,7 @@ Route::middleware('auth:sanctum')->group(function () {
         return $request->user();
     });
 
-    // Student
+    // Students
     Route::get('/students', [StudentController::class, 'index']);
     Route::post('/students', [StudentController::class, 'store']);
     Route::post('/students/{student}/faces', [StudentFaceController::class, 'store']);
@@ -32,4 +33,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Class Schedules
     Route::get('/class-schedules', [ClassScheduleController::class, 'index']);
     Route::post('/class-schedules', [ClassScheduleController::class, 'store']);
+
+    // Attendance Sessions
+    Route::get('/attendance-sessions', [AttendanceSessionController::class, 'index']);
+    Route::post('/attendance-sessions', [AttendanceSessionController::class, 'store']);
+    Route::get('/attendance-sessions/{attendanceSession}', [AttendanceSessionController::class, 'show']);
 });
