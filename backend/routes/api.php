@@ -9,6 +9,8 @@ use App\Http\Controllers\Api\CourseController;
 use App\Http\Controllers\Api\KelasController;
 use App\Http\Controllers\Api\ClassScheduleController;
 use App\Http\Controllers\Api\AttendanceSessionController;
+use App\Http\Controllers\Api\RecognitionController;
+use App\Http\Controllers\Api\ReportController;
 
 Route::post('/auth/login', [AuthController::class, 'login']);
 
@@ -16,6 +18,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', function (Request $request) {
         return $request->user();
     });
+
+    Route::post('/auth/logout', [AuthController::class, 'logout']);
 
     // Students
     Route::get('/students', [StudentController::class, 'index']);
@@ -38,7 +42,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::match(['put', 'patch'], '/courses/{course}', [CourseController::class, 'update']);
     Route::delete('/courses/{course}', [CourseController::class, 'destroy']);
 
-    // Classes (Kelas)
+    // Classes
     Route::get('/classes', [KelasController::class, 'index']);
     Route::post('/classes', [KelasController::class, 'store']);
     Route::get('/classes/{kelas}', [KelasController::class, 'show']);
@@ -57,4 +61,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/attendance-sessions', [AttendanceSessionController::class, 'store']);
     Route::get('/attendance-sessions/{attendanceSession}', [AttendanceSessionController::class, 'show']);
     Route::patch('/attendance-sessions/{attendanceSession}', [AttendanceSessionController::class, 'updateStatus']);
+
+    // Recognitions
+    Route::post('/recognitions', [RecognitionController::class, 'store']);
+    Route::get('/recognitions/{recognition}', [RecognitionController::class, 'show']);
+    Route::post('/recognitions/{recognition}/confirm', [RecognitionController::class, 'confirm']);
+
+    // Reports
+    Route::get('/reports/attendance', [ReportController::class, 'attendance']);
 });
