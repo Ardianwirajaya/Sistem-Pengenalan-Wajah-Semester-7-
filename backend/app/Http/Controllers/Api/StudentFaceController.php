@@ -17,6 +17,10 @@ class StudentFaceController extends Controller
             'is_primary' => 'sometimes|boolean',
         ]);
 
+        if ($request->boolean('is_primary', false)) {
+            $student->faces()->update(['is_primary' => false]);
+        }
+
         $path = $request->file('photo')->store("students/{$student->id}/faces", 'minio');
 
         $face = $student->faces()->create([
@@ -31,9 +35,17 @@ class StudentFaceController extends Controller
 
     public function index(Student $student)
     {
-        $faces = $student->faces()->orderByDesc('is_primary')->orderByDesc('id')->get();
+        $faces = $student->faces()
+            ->orderByDesc('is_primary')
+            ->orderByDesc('id')
+            ->get();
 
         return $faces->map(fn ($face) => $this->faceWithUrl($face));
+    }
+
+    public function show(StudentFace $studentFace)
+    {
+        return $this->faceWithUrl($studentFace);
     }
 
     public function url(StudentFace $studentFace)
@@ -42,6 +54,14 @@ class StudentFaceController extends Controller
             'url' => $this->signedUrl($studentFace->object_key),
             'expires_in_seconds' => 900,
         ]);
+    }
+
+    public function destroy(StudentFace $studentFace)
+    {
+        Storage::disk('minio')->delete($studentFace->object_key);
+        $studentFace->delete();
+
+        return response()->json(['message' => 'Face deleted.']);
     }
 
     private function faceWithUrl(StudentFace $face): array

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Student;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class StudentController extends Controller
 {
@@ -43,5 +44,32 @@ class StudentController extends Controller
         $student = Student::create($data);
 
         return response()->json($student, 201);
+    }
+
+    public function show(Student $student)
+    {
+        return $student->load('faces');
+    }
+
+    public function update(Request $request, Student $student)
+    {
+        $data = $request->validate([
+            'nim' => ['sometimes', 'string', 'max:50', Rule::unique('students', 'nim')->ignore($student->id)],
+            'name' => 'sometimes|string|max:255',
+            'email' => 'sometimes|nullable|email|max:255',
+            'program_study' => 'sometimes|string|max:255',
+            'is_active' => 'sometimes|boolean',
+        ]);
+
+        $student->update($data);
+
+        return $student->fresh();
+    }
+
+    public function destroy(Student $student)
+    {
+        $student->delete();
+
+        return response()->json(['message' => 'Student deleted.']);
     }
 }

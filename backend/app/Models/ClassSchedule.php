@@ -12,4 +12,9 @@ class ClassSchedule extends Model
     {
         return $this->belongsTo(Kelas::class, 'class_id');
     }
+
+    public function attendanceSessions()
+    {
+        return $this->hasMany(AttendanceSession::class, 'class_schedule_id');
+    }
 }

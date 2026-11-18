@@ -64,4 +64,18 @@ class AttendanceSessionController extends Controller
             'recognitionSessions.results.candidateStudent',
         ]);
     }
+
+    public function updateStatus(Request $request, AttendanceSession $attendanceSession)
+    {
+        $data = $request->validate([
+            'status' => 'required|in:open,closed,cancelled',
+        ]);
+
+        $attendanceSession->update($data);
+
+        return $attendanceSession->fresh('schedule.kelas.course');
+    }
+
+    // No destroy() — attendance history is not deletable.
+    // Use updateStatus with 'cancelled' to void a session instead.
 }

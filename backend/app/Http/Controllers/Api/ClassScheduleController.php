@@ -37,4 +37,38 @@ class ClassScheduleController extends Controller
 
         return response()->json($schedule->load('kelas.course'), 201);
     }
+
+    public function show(ClassSchedule $classSchedule)
+    {
+        return $classSchedule->load('kelas.course');
+    }
+
+    public function update(Request $request, ClassSchedule $classSchedule)
+    {
+        $data = $request->validate([
+            'class_id' => 'sometimes|exists:classes,id',
+            'day' => 'sometimes|string|max:20',
+            'start_time' => 'sometimes|date_format:H:i',
+            'end_time' => 'sometimes|date_format:H:i|after:start_time',
+            'room' => 'sometimes|nullable|string|max:50',
+        ]);
+
+        $classSchedule->update($data);
+
+        return $classSchedule->fresh('kelas.course');
+    }
+
+    public function destroy(ClassSchedule $classSchedule)
+    {
+        if ($classSchedule->attendanceSessions()->exists()) {
+            return response()->json([
+                'message' => 'Cannot delete schedule: attendance sessions exist.',
+                'errors' => ['schedule' => ['Cannot delete schedule: attendance sessions exist.']],
+            ], 422);
+        }
+
+        $classSchedule->delete();
+
+        return response()->json(['message' => 'Schedule deleted.']);
+    }
 }
