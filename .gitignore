@@ -34,3 +34,4 @@ miniodata/
 # Temp
 tmp/
 *.tmp
+venv/

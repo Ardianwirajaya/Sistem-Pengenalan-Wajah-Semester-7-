@@ -7,12 +7,12 @@ use App\Models\AttendanceDetail;
 use App\Models\AttendanceSession;
 use App\Models\RecognitionResult;
 use App\Models\RecognitionSession;
-use App\Services\MockAiService;
+use App\Services\HttpAiService;
 use Illuminate\Http\Request;
 
 class RecognitionController extends Controller
 {
-    public function store(Request $request, MockAiService $ai)
+    public function store(Request $request, HttpAiService $ai)
     {
         $request->validate([
             'attendance_session_id' => 'required|exists:attendance_sessions,id',
@@ -42,7 +42,7 @@ class RecognitionController extends Controller
             'created_by' => $request->user()->id,
         ]);
 
-        // MOCK: process instantly. Replace with a Redis job + FastAPI later.
+        // Call FastAPI YOLOv11 + ArcFace service
         $result = $ai->recognize($path, $session->id);
 
         foreach ($result['faces'] as $face) {
