@@ -1,0 +1,7 @@
+path: .  
+train: train/images  
+val: valid/images    
+
+nc: 1  # Sesuaikan jumlah kelas dari Roboflow Anda
+names: 
+  0: "wajah"  # Sesuaikan nama label kelas Anda
