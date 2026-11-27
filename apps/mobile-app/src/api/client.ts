@@ -252,6 +252,45 @@ function extractErrorMessage(payload: unknown, status: number): { message: strin
   return { message: `Request gagal (HTTP ${status})` };
 }
 
+function sendFormDataWithXhr(
+  url: string,
+  method: string,
+  headers: Record<string, string>,
+  formData: FormData,
+  timeoutMs: number,
+): Promise<{ status: number; ok: boolean; text: string }> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(method, url);
+    xhr.timeout = timeoutMs;
+
+    for (const [key, value] of Object.entries(headers)) {
+      if (key.toLowerCase() === 'content-type') continue;
+      xhr.setRequestHeader(key, value);
+    }
+
+    xhr.onload = () => {
+      resolve({
+        status: xhr.status,
+        ok: xhr.status >= 200 && xhr.status < 300,
+        text: xhr.responseText ?? '',
+      });
+    };
+
+    xhr.onerror = () => {
+      reject(new Error('Network request failed'));
+    };
+
+    xhr.ontimeout = () => {
+      const timeoutErr = new Error('Request timed out');
+      timeoutErr.name = 'AbortError';
+      reject(timeoutErr);
+    };
+
+    xhr.send(formData);
+  });
+}
+
 async function request<T>(
   path: string,
   options: {
@@ -285,17 +324,36 @@ async function request<T>(
     fetchBody = JSON.stringify(body);
   }
 
+  let status = 0;
+  let ok = false;
+  let text = '';
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-  let response: Response;
   try {
-    response = await fetch(`${currentBaseUrl}${path}`, {
-      method,
-      headers,
-      body: fetchBody,
-      signal: controller.signal,
-    });
+    if (formData && Platform.OS !== 'web') {
+      const xhrRes = await sendFormDataWithXhr(
+        `${currentBaseUrl}${path}`,
+        method,
+        headers,
+        formData,
+        timeoutMs,
+      );
+      status = xhrRes.status;
+      ok = xhrRes.ok;
+      text = xhrRes.text;
+    } else {
+      const response = await fetch(`${currentBaseUrl}${path}`, {
+        method,
+        headers,
+        body: fetchBody,
+        signal: controller.signal,
+      });
+      status = response.status;
+      ok = response.ok;
+      text = await response.text();
+    }
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
       throw new ApiError(
@@ -312,7 +370,6 @@ async function request<T>(
     clearTimeout(timer);
   }
 
-  const text = await response.text();
   let parsed: unknown = null;
   if (text) {
     try {
@@ -322,12 +379,12 @@ async function request<T>(
     }
   }
 
-  if (!response.ok) {
-    if (response.status === 401 && !skipUnauthorizedCallback && onUnauthorizedHandler) {
+  if (!ok) {
+    if (status === 401 && !skipUnauthorizedCallback && onUnauthorizedHandler) {
       onUnauthorizedHandler();
     }
-    const { message, errors } = extractErrorMessage(parsed, response.status);
-    throw new ApiError(message, response.status, errors);
+    const { message, errors } = extractErrorMessage(parsed, status);
+    throw new ApiError(message, status, errors);
   }
 
   return parsed as T;
@@ -358,8 +415,13 @@ export async function appendPhotoToFormData(
     return;
   }
 
+  const normalizedUri =
+    asset.uri.startsWith('file://') || asset.uri.startsWith('content://')
+      ? asset.uri
+      : `file://${asset.uri}`;
+
   formData.append(fieldName, {
-    uri: asset.uri,
+    uri: normalizedUri,
     name: filename,
     type: mimeType,
   } as unknown as Blob);
